@@ -1,38 +1,46 @@
-# app/worker.py
 import asyncio
+from fastapi import FastAPI
+from pydantic import BaseModel
 from app.db import store_fact, get_recent_facts
+import threading
 import datetime
 
+app = FastAPI(title="Aurora")
+
+class ChatMessage(BaseModel):
+    message: str
+
+# Chat API endpoints
+@app.get("/")
+def root():
+    return {"message": "Aurora is alive!"}
+
+@app.post("/chat")
+def chat(msg: ChatMessage):
+    user_message = msg.message
+    store_fact("user_message", user_message)
+    reply = f"Aurora received: '{user_message}'"
+    print(f"[{datetime.datetime.now()}] Chat: {user_message} -> {reply}")
+    return {"reply": reply}
+
+# Autonomous loop
 async def decision_loop():
-    """
-    Aurora's autonomous loop:
-    - Fetches or generates new facts
-    - Stores them in Supabase
-    - Logs actions
-    """
     while True:
         try:
-            # Example: mock candidate facts
             candidates = [
                 {"url": "https://example.com/article1", "summary": "Sample fact 1"},
                 {"url": "https://example.com/article2", "summary": "Sample fact 2"}
             ]
-
             for c in candidates:
                 store_fact(c["url"], c["summary"])
                 print(f"[{datetime.datetime.now()}] Stored fact: {c['summary']}")
-
-            # Optional: fetch recent facts for verification
-            recent = get_recent_facts(limit=5)
-            print(f"[{datetime.datetime.now()}] Recent facts count: {len(recent)}")
-
-            # Sleep for 1 hour before next loop (3600 seconds)
             await asyncio.sleep(3600)
-
         except Exception as e:
-            print(f"[{datetime.datetime.now()}] Error in loop: {e}")
-            await asyncio.sleep(60)  # Wait 1 minute before retrying
+            print(f"[{datetime.datetime.now()}] Error: {e}")
+            await asyncio.sleep(60)
 
-if __name__ == "__main__":
-    print("Aurora worker started...")
+# Run the loop in a separate thread
+def start_loop():
     asyncio.run(decision_loop())
+
+threading.Thread(target=start_loop, daemon=True).start()
